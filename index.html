@@ -86,8 +86,8 @@ const cv=$('c'),ctx=cv.getContext('2d');
 let fin;try{fin=JSON.parse(localStorage.getItem('salvecarga4'))}catch(e){}if(!Array.isArray(fin)||fin.length!=4)fin=[null,null,null,null];
 const save=()=>{try{localStorage.setItem('salvecarga4',JSON.stringify(fin))}catch(e){}};
 let me='';try{me=localStorage.getItem('salvecarga_nome')||''}catch(e){}
-let rk;try{rk=JSON.parse(localStorage.getItem('salvecarga_rank'))}catch(e){}if(!Array.isArray(rk))rk=[];
-const saveRk=()=>{try{localStorage.setItem('salvecarga_rank',JSON.stringify(rk));localStorage.setItem('salvecarga_nome',me)}catch(e){}};
+let rk;try{rk=JSON.parse(localStorage.getItem('salvecarga_rank_rodada2'))}catch(e){}if(!Array.isArray(rk))rk=[];
+const saveRk=()=>{try{localStorage.setItem('salvecarga_rank_rodada2',JSON.stringify(rk));localStorage.setItem('salvecarga_nome',me)}catch(e){}};
 const ti=q=>q>=90?0:q>=60?1:q>=30?2:3,TS=['Perfeita','Pequenos danos','Danos graves','Quase perdida'],TL=['Entrega perfeita','Entrega com pequenos danos','Entrega com danos graves','Carga praticamente perdida'];
 const SN=[{h:[[1320,.05,'triangle'],[990,.12,'triangle']],w:[[784,.1],[988,.1],[1319,.25]],g:[[1046,.08,'triangle']]},
 {h:[[110,.18,'triangle'],[80,.25]],w:[[392,.18],[523,.18],[659,.3]],g:[[220,.1,'triangle']]},
@@ -96,7 +96,19 @@ const SN=[{h:[[1320,.05,'triangle'],[990,.12,'triangle']],w:[[784,.1],[988,.1],[
 const play=(k,i=idx)=>SN[i][k].forEach((n,j)=>setTimeout(()=>tone(n[0],n[1],n[2]||'sine'),j*(k=='w'?110:45)));
 const PK=['Embalagem térmica e controle de temperatura','Caixa reforçada e amortecimento','Cavalete, apoios de borracha e fixação','Embalagem apropriada e proteção dos terminais'];
 const CR=[[[-23,-8],[-14,-4],[-17,3],[-8,8]],[[23,-14],[15,-9],[18,-1],[9,3]],[[-6,23],[-3,15],[-9,10],[-5,4]],[[8,-23],[4,-16],[11,-11],[6,-6]],[[23,12],[14,10],[17,17],[8,19]]];
-function rankUp(){if(!me)return;const s=fin.reduce((a,x)=>a+(x?x.sc:0),0),m=fin.filter(Boolean).length,k=me.toLowerCase(),o=rk.find(r=>r.n.toLowerCase()==k);if(!o)rk.push({n:me,s,m});else if(s>o.s||(s===o.s&&m>o.m)){o.s=s;o.m=m}saveRk();syncRecord().catch(()=>{})}
+function rankUp(mission, score) {
+  if (!me) return;
+  let record = rk.find(row => row.n.toLowerCase() === me.toLowerCase());
+  if (!record) {
+    record = {n: me, s: 0, m: 0, scores: [0, 0, 0, 0]};
+    rk.push(record);
+  }
+  record.scores[mission] = Math.max(score, record.scores[mission]);
+  record.s = record.scores.reduce((total, value) => total + value, 0);
+  record.m = record.scores.filter(value => value > 0).length;
+  saveRk();
+  syncRecord().catch(() => {});
+}
 function renderRanks(rows){const l=rows.slice().sort((a,b)=>b.s-a.s).slice(0,10),e=$('rk');e.textContent='';e.hidden=!l.length;l.forEach((r,i)=>{const li=document.createElement('li'),a=document.createElement('span'),b=document.createElement('span');if(r.n.toLowerCase()==me.toLowerCase())li.className='me';a.textContent=(i+1)+'. '+r.n;b.textContent=r.s.toLocaleString('pt-BR')+' ('+r.m+'/4)';li.append(a,b);e.append(li)})}
 let ft=[],emb=0,ql=100,idx=0,pos={x:100,y:505},lives=3,run=false,paused=false,drag=false,pid=null,el=0,vt=0,inv=0,flash=0,shake=0,mute=false,tt=0,mv=null,P=[],bgc=null,bgi=-1;
 $('lvls').innerHTML=L.map((v,i)=>`<button class="lv" data-i="${i}"><em>${i+1}</em><div><b>${v.n}</b><small></small></div></button>`).join('');
@@ -151,7 +163,7 @@ async function rpc(method,body){
 async function syncRecord(){
   if(!configured()) return;
   const record=rk.find(row=>row.n.toLowerCase()===me.toLowerCase());
-  if(record) await rpc('carga_registrar',{n:record.n,s:record.s,m:record.m});
+  if(record) await rpc('carga_registrar_rodada2',{n:record.n,s:record.s,m:record.m});
 }
 async function showRk(){
   const version=++rankView;
@@ -184,7 +196,7 @@ function start(){const n=$('nm'),v=n.value.trim().slice(0,14);if(!v){n.classList
 function hit(k){if(!run||paused)return;drag=false;pid=null;lives--;const d=Math.round(L[idx].fr*(k==2?1.5:1)*(emb==idx?1:1.5));ql=Math.max(0,ql-d);ft.push({x:pos.x,y:pos.y-30,s:'−'+d+'%',l:1});flash=14;shake=14;inv=900;play('h');burst(pos.x,pos.y,12+d,['#c99a5e','#8f6535','#e8dcc0','#e8381c','#16181a'],6);const a=L[idx].p[0];pos={x:a[0],y:a[1]};routeMax=0;$('progress').innerHTML='Progresso da rota: <strong>0%</strong>';ui();
 if(lives<=0||ql<=0)modal('A carga foi destruída',(ql<=0?'A qualidade chegou a 0%. ':'As 3 vidas acabaram. ')+'Você perdeu a fase e precisa repeti-la para liberar a próxima.','Dica: nas curvas, arraste devagar. As setas do teclado e os botões de direção também funcionam.','Tentar de novo',()=>begin(idx),'Menu',menu);else toast('−1 vida e −'+d+'% de qualidade. A carga voltou para a saída')}
 function win(){if(!run||paused)return;run=false;drag=false;pid=null;const v=L[idx],sec=el/1000|0,sc=Math.round((100+Math.max(0,1-el/(v.l*1000))*1000)*ql/100),st=ql>=90&&sec<=v.l*.6?3:ql>=60?2:1,o=fin[idx];
-fin[idx]={sc:Math.max(sc,o?o.sc:0),st:Math.max(st,o?o.st:0),t:sec};save();rankUp();ui();play('w');
+fin[idx]={sc:Math.max(sc,o?o.sc:0),st:Math.max(st,o?o.st:0),t:sec};save();rankUp(idx,sc);ui();play('w');
 const g=v.p[v.p.length-1];burst(g[0],g[1],40,['#ffc400','#f2f2ee','#e8381c','#c99a5e'],7);
 if(fin.every(Boolean)){modal('Todas as cargas foram salvas','Você terminou as 4 missões com '+fin.reduce((a,x)=>a+x.sc,0).toLocaleString('pt-BR')+' pontos e '+fin.reduce((a,x)=>a+x.st,0)+' de 12 estrelas.','Cada produto precisa de embalagem e transporte adequados para chegar com segurança.','Jogar de novo',resetAll,'Melhorar estrelas',()=>begin(0));showRk()}
 else{const nx=idx<3?idx+1:fin.findIndex(x=>!x);modal(TL[ti(ql)]+' '+stars(st),'Qualidade: '+ql+'%. Tempo: '+(el/1000).toFixed(1).replace('.',',')+' s. Pontos da fase: '+sc+'.',v.t,'Próxima carga',()=>begin(nx),'Repetir fase',()=>begin(idx))}}
